@@ -1,4 +1,4 @@
-# Pretexer
+# Pretext-app
 
 A python script to run everything related to pretext, from initializing a folder to setting up a config file (publisher.xml) to building latex/pdf and html from ptx source files.
 

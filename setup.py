@@ -7,6 +7,7 @@ setup(
     install_requires=[
         'Click',
         'lxml',
+        'PyYAML',
         # 'os',
     ],
     entry_points='''

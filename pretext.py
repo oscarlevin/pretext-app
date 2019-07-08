@@ -1,39 +1,36 @@
 import click
+import os
+import appdirs
 import yaml
 import lxml.etree as ET
 
-#This allows passing arguments between subcomands?
-class Config(object):
-    
-    def __init__(self):
-        self.verbose = False
-        
-pass_config = click.make_pass_decorator(Config)
+
+config_option = click.option('-c', '--config', default='./ptxconfig.yml', help="User specified config file (default = ptxconfig.yml)")
 
 # Set up cfgs dictionary with default config values:
-cfgs = load_config('./ptxconfig.yml')
+# cfgs = load_default_configs()
 
+# Testing variables to be moved to config
+# xsltdir = 'C:/Users/oscar.levin/Documents/GitHub/mathbook'
+# xsltdir = cfgs['pretextdir']
+# docroot = './src/main.ptx'
+# ptxfile = docroot
+# ptxfile = cfgs['mainfile']
+# pretext_qs = 'C:/Users/oscar.levin/Documents/GitHub/pretext-quickstart/xsl/pretext-setup.xsl'
 
 # Main Click command entry:
 @click.group()
 @click.option('-v', '--verbose', is_flag=True)
 @click.option('-u', '--update-config', is_flag=True, default=False, help="Update config file with provided options")
-@click.option('-c', '--config', type=click.File('r'), default='./ptxconfig.yml', help="User specified config file (default = ptxconfig.yml)")
+@config_option
+# @click.option('-c', '--config', default='./ptxconfig.yml', help="User specified config file (default = ptxconfig.yml)")
 # @click.option('-s', '--string', default='world!!', help='The greeted thing.')
 def cli(verbose, update_config, config):
     """A suite of tools to set up and process PreTeXt documents"""
     if verbose: #Eventually verbose will give more output, or just remove this!
         click.echo('Verbose mode doesn\'t do anything')
-    # Test out config file; eventually move this inside a click command?
-    # with open(config, 'r') as ymlfile:
-    cfg = yaml.safe_load(config)
-    # Testing variables to be moved to config
-    # xsltdir = 'C:/Users/oscar.levin/Documents/GitHub/mathbook'
-    xsltdir = cfg['pretextdir']
-    docroot = './src/main.ptx'
-    # ptxfile = docroot
-    ptxfile = cfg['mainfile']
-    pretext_qs = 'C:/Users/oscar.levin/Documents/GitHub/pretext-quickstart/xsl/pretext-setup.xsl'
+    cfgs = get_configs(config)
+
 
 #### Sub commands: ####
 # build sub-command: to build current ptx source into various formats.
@@ -41,12 +38,14 @@ def cli(verbose, update_config, config):
 # @click.option('-t', '--target-format', default="html", help='output format (latex/html/epub)')
 @click.option('-o', '--output', type=click.Path(), default='./output', help='output directory path')
 @click.argument('format')
-def build(format, output):
+@config_option
+def build(format, output, config):
     """Process PreTeXt files into specified format, either html or latex."""
+    cfgs = get_configs(config)
     if format=='html':
-        build_html(output)
+        build_html(output,cfgs)
     elif format=='latex':
-        build_latex(output)
+        build_latex(output,cfgs)
     else:
         click.echo('%s is not yet a supported build target' % format)
 
@@ -64,23 +63,53 @@ def init(directory, format):
         click.echo('%s is not currently supported' % format)
 
 @cli.command()
-def test():
+@config_option
+def test(config):
     """Test option for dev"""
-    click.echo('Pretext is located in ' + xsltdir)
-    click.echo(cfg)
+    cfgs = get_configs(config)
+    # xsltdir = cfgs['pretextdir']
+    # click.echo('Pretext is located in ' + xsltdir)
+    click.echo(cfgs)
 ######### End Click Setup ############
 
+
+
 #### Helper Functions ####
-# set config variables:
-def load_config(config_file):
+# set default config variables:
+def get_configs(project_config):
+    cfg_dir = appdirs.user_config_dir('pretext')
+    cfg_file = os.path.join(cfg_dir, 'ptxconfig.yml')
+    if not os.path.isfile(cfg_file):
+        create_user_config(cfg_file)
+    with open(cfg_file, 'r') as ymlfile:
+        cfg = yaml.safe_load(ymlfile)
+    #load project specific config file, and update cfg with it:
+    # project_config = './ptxconfig.yml'
+    if os.path.isfile(project_config):
+        with open(project_config, 'r') as local_ymlfile:
+            cfg.update(yaml.safe_load(local_ymlfile))
+    else:
+        click.echo("Warning: did not find "+project_config+"; using system wide defaults.")
+    return cfg
 
+# include custom config file if requested:
+def load_custom_configs(configfile):
+    pass
 
+# from https://stackoverflow.com/questions/40193112/python-setuptools-distribute-configuration-files-to-os-specific-directories
+def create_user_config(cfg_file):
+    # source = pkg_resources.resource_stream(__name__, 'my_package.conf.dist')
+    print('Trying to write cfg file')
+    os.makedirs(os.path.dirname(cfg_file), exist_ok=True) #make directory if needed.
+    with open(cfg_file, 'w') as dest:
+        dest.writelines('#ptxconfig.\n')
 
-
+### Setup PreTeXt:
 #Setup functions:
 def setup_book(directory):
     import os
     dom = ET.parse(directory + "/outline.xml")
+    pretext_qs = 'C:/Users/oscar.levin/Documents/GitHub/pretext-quickstart/xsl/pretext-setup.xsl'
     xslt = ET.parse(pretext_qs)
     transform = ET.XSLT(xslt)
     if not os.path.exists('xsl'):
@@ -89,11 +118,11 @@ def setup_book(directory):
         os.makedirs('src')
     transform(dom)
     
-def setup_article():
+def setup_article(directory):
     pass
 
 #Build functions:
-def build_html(output):
+def build_html(output,cfgs):
     import os
     # xsltfile = xsltdir + '/xsl/mathbook-html.xsl'
     xsltfile = 'C:/Users/oscar.levin/Documents/GitHub/mathbook/xsl/mathbook-html.xsl'
@@ -116,9 +145,9 @@ def build_html(output):
     transform(dom)
 
     
-def build_latex(output):
-    xsltfile = xsltdir + '/xsl/mathbook-latex.xsl'
-    # ptxfile = "../mathbook/examples/minimal/minimal.xml"
+def build_latex(output,cfgs):
+    xsltfile = cfgs['xsltdir'] + '/xsl/mathbook-latex.xsl'
+    ptxfile = "../mathbook/examples/minimal/minimal.xml"
     dom = ET.parse(ptxfile)
     xslt = ET.parse(xsltfile)
     transform = ET.XSLT(xslt)

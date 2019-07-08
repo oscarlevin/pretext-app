@@ -1,3 +1,4 @@
-mainfile: './src/main.ptx'
+mainfile: './ptx/main.ptx'
 pretextdir: 'C:/Users/oscar.levin/Documents/GitHub/mathbook'
-cusomxsldir: ./xsl
+customxsldir: ./xsl
+testkey: 'my test'

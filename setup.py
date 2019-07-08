@@ -8,6 +8,7 @@ setup(
         'Click',
         'lxml',
         'PyYAML',
+        'appdirs',
         # 'os',
     ],
     entry_points='''

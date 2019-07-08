@@ -1,5 +1,6 @@
 import click
-import os
+from pathlib import Path
+# import os
 import appdirs
 import yaml
 import lxml.etree as ET
@@ -37,15 +38,17 @@ def cli(verbose, update_config, config):
 @cli.command()
 # @click.option('-t', '--target-format', default="html", help='output format (latex/html/epub)')
 @click.option('-o', '--output', type=click.Path(), default='./output', help='output directory path')
+@click.option('-w', '--webwork', is_flag=True, default=False, help='rebuild webwork')
+@click.option('-d', '--diagrams', is_flag=True, default=False, help='regenerate images using mbx script')
 @click.argument('format')
 @config_option
-def build(format, output, config):
+def build(format, output, webwork, diagrams, config):
     """Process PreTeXt files into specified format, either html or latex."""
     cfgs = get_configs(config)
     if format=='html':
-        build_html(output,cfgs)
+        build_html(output,webwork,diagrams,cfgs)
     elif format=='latex':
-        build_latex(output,cfgs)
+        build_latex(output,webwork,cfgs)
     else:
         click.echo('%s is not yet a supported build target' % format)
 
@@ -61,6 +64,13 @@ def init(directory, format):
         setup_article(directory)
     else:
         click.echo('%s is not currently supported' % format)
+
+# TODO: set up config function to use app to set values of config file.
+@cli.command()
+def config():
+    """Set project-level or global configuration options"""
+    pass
+
 
 @cli.command()
 @config_option
@@ -78,15 +88,15 @@ def test(config):
 # set default config variables:
 def get_configs(project_config):
     cfg_dir = appdirs.user_config_dir('pretext')
-    cfg_file = os.path.join(cfg_dir, 'ptxconfig.yml')
-    if not os.path.isfile(cfg_file):
+    cfg_file = Path(cfg_dir) /  'ptxconfig.yml'
+    if not cfg_file.exists():
         create_user_config(cfg_file)
-    with open(cfg_file, 'r') as ymlfile:
+    with cfg_file.open() as ymlfile:
         cfg = yaml.safe_load(ymlfile)
     #load project specific config file, and update cfg with it:
     # project_config = './ptxconfig.yml'
-    if os.path.isfile(project_config):
-        with open(project_config, 'r') as local_ymlfile:
+    if Path(project_config).exists():
+        with Path(project_config).open() as local_ymlfile:
             cfg.update(yaml.safe_load(local_ymlfile))
     else:
         click.echo("Warning: did not find "+project_config+"; using system wide defaults.")
@@ -100,30 +110,39 @@ def load_custom_configs(configfile):
 def create_user_config(cfg_file):
     # source = pkg_resources.resource_stream(__name__, 'my_package.conf.dist')
     print('Trying to write cfg file')
-    os.makedirs(os.path.dirname(cfg_file), exist_ok=True) #make directory if needed.
-    with open(cfg_file, 'w') as dest:
-        dest.writelines('#ptxconfig.\n')
+    cfg_file.parent.mkdir(parents=True, exist_ok=True)
+    # os.makedirs(os.path.dirname(cfg_file), exist_ok=True) #make directory if needed.
+    with cfg_file.open('w') as dest:
+        dest.writelines('#ptxconfig.\n test: key\n')
 
 ### Setup PreTeXt:
 #Setup functions:
 def setup_book(directory):
-    import os
     dom = ET.parse(directory + "/outline.xml")
     pretext_qs = 'C:/Users/oscar.levin/Documents/GitHub/pretext-quickstart/xsl/pretext-setup.xsl'
     xslt = ET.parse(pretext_qs)
     transform = ET.XSLT(xslt)
-    if not os.path.exists('xsl'):
-        os.makedirs('xsl')
-    if not os.path.exists('src'):
-        os.makedirs('src')
+    # Make directories if don't exist
+    Path('xsl').mkdir(exist_ok=True)
+    Path('src').mkdir(exist_ok=True)
+    # if not os.path.exists('xsl'):
+    #     os.makedirs('xsl')
+    # if not os.path.exists('src'):
+    #     os.makedirs('src')
     transform(dom)
     
 def setup_article(directory):
     pass
 
+#config setup:
+def find_mathbook():
+    pass
+
+
+
 #Build functions:
-def build_html(output,cfgs):
-    import os
+def build_html(output,webwork,diagrams,cfgs):
+    from os import chdir
     # xsltfile = xsltdir + '/xsl/mathbook-html.xsl'
     xsltfile = 'C:/Users/oscar.levin/Documents/GitHub/mathbook/xsl/mathbook-html.xsl'
     # ptxfile = 'C:/Users/oscar.levin/Documents/GitHub/discrete-book/ptx/dmoi-sample.ptx'
@@ -131,13 +150,16 @@ def build_html(output,cfgs):
     ptxfile = 'C:/Users/oscar.levin/Documents/GitHub/new-project/src/main.ptx'
     # ptxfile = "../../mathbook/examples/minimal/minimal.xml"
     # outputdir = "./html"
-    if not os.path.exists(output):
-        os.makedirs(output)
-    os.chdir(output) #change to output dir. 
-    if not os.path.exists('knowl'):
-        os.makedirs('knowl')
-    if not os.path.exists('images'):
-        os.makedirs('images')
+    Path(output).mkdir(parents=True, exist_ok=True)
+    # if not os.path.exists(output):
+    #     os.makedirs(output)
+    chdir(output) #change to output dir. 
+    Path('knowl').mkdir(exist_ok=True)
+    # if not os.path.exists('knowl'):
+    #     os.makedirs('knowl')
+    Path('images').mkdir(exist_ok=True)
+    # if not os.path.exists('images'):
+    #     os.makedirs('images')
     dom = ET.parse(ptxfile)
     dom.xinclude()
     xslt = ET.parse(xsltfile)
@@ -145,7 +167,7 @@ def build_html(output,cfgs):
     transform(dom)
 
     
-def build_latex(output,cfgs):
+def build_latex(output,webwork,cfgs):
     xsltfile = cfgs['xsltdir'] + '/xsl/mathbook-latex.xsl'
     ptxfile = "../mathbook/examples/minimal/minimal.xml"
     dom = ET.parse(ptxfile)
